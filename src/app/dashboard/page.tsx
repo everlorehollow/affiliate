@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { StatsCard } from "@/components/StatsCard";
+import { CopyButton } from "@/components/CopyButton";
 import { createServerClient } from "@/lib/supabase";
 
 export default async function DashboardPage() {
@@ -170,14 +171,7 @@ export default async function DashboardPage() {
             <code className="flex-1 bg-[#1a0a2e] px-4 py-3 rounded-lg text-lg font-mono text-[#d4af37] border border-[#d4af37]/30">
               {affiliate.referral_code}
             </code>
-            <button
-              className="px-6 py-3 bg-[#d4af37] hover:bg-[#b8962e] text-[#1a0a2e] font-semibold rounded-lg transition-colors"
-              onClick={() => {
-                navigator.clipboard.writeText(affiliate.referral_code);
-              }}
-            >
-              Copy
-            </button>
+            <CopyButton text={affiliate.referral_code} />
           </div>
           <p className="text-sm text-gray-400 mt-4">
             Share this code with your audience. When they use it at checkout, they get 10% off
