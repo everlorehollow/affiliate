@@ -14,19 +14,11 @@ export function useSupabase(): SupabaseClient<Database> | null {
   const supabase = useMemo(() => {
     if (!session) return null;
 
+    // Use the accessToken option for third-party auth (recommended pattern)
     return createClient<Database>(supabaseUrl, supabaseAnonKey, {
-      global: {
-        fetch: async (url, options = {}) => {
-          // Get fresh token from Clerk for each request
-          const token = await session.getToken({ template: "supabase" });
-
-          const headers = new Headers(options.headers);
-          if (token) {
-            headers.set("Authorization", `Bearer ${token}`);
-          }
-
-          return fetch(url, { ...options, headers });
-        },
+      accessToken: async () => {
+        const token = await session.getToken({ template: "supabase" });
+        return token ?? '';
       },
     });
   }, [session]);

@@ -21,14 +21,12 @@ export function createServerClient() {
 }
 
 // Client for use in Server Components with Clerk auth token
-export async function createAuthenticatedClient(getToken: () => Promise<string | null>) {
-  const token = await getToken();
-
+// Uses the accessToken option for third-party auth (recommended pattern)
+export function createAuthenticatedClient(getToken: () => Promise<string | null>) {
   return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    accessToken: async () => {
+      const token = await getToken();
+      return token ?? '';
     },
   });
 }
