@@ -23,15 +23,30 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("x-shopify-hmac-sha256");
   const topic = request.headers.get("x-shopify-topic");
 
+  const supabase = createServerClient();
+
+  // Log all incoming webhooks for debugging
+  await supabase.from("activity_log").insert({
+    action: "shopify_webhook_received",
+    details: {
+      topic,
+      has_signature: !!signature,
+      body_preview: body.substring(0, 500),
+      timestamp: new Date().toISOString(),
+    },
+  });
+
   // Verify webhook signature
   const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
   if (secret && !verifyShopifyWebhook(body, signature, secret)) {
-    console.error("Invalid Shopify webhook signature");
+    await supabase.from("activity_log").insert({
+      action: "shopify_webhook_invalid_signature",
+      details: { topic, signature, timestamp: new Date().toISOString() },
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   const order = JSON.parse(body);
-  const supabase = createServerClient();
 
   try {
     // Handle different webhook topics
@@ -43,7 +58,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook processing error:", error);
+    await supabase.from("activity_log").insert({
+      action: "shopify_webhook_error",
+      details: {
+        topic,
+        error: error instanceof Error ? error.message : String(error),
+        order_id: order?.id,
+        timestamp: new Date().toISOString()
+      },
+    });
     return NextResponse.json(
       { error: "Processing failed" },
       { status: 500 }
