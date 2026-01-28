@@ -8,12 +8,64 @@
   --gold: #d4af37;
   --gold-hover: #b8962e;
   --purple-accent: #6b21a8;
+  --soft-purple: #9d7cd8;
   --border: rgba(212, 175, 55, 0.2);
+
+  /* Font families */
+  --font-heading: var(--font-cinzel), "Cinzel", Georgia, serif;
+  --font-body: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
 }
 
+/* Gradient background matching the branding */
 body {
-  background-color: var(--background);
+  background: linear-gradient(180deg,
+    #0a0612 0%,
+    #1a0f2e 30%,
+    #2c0046 50%,
+    #1a0f2e 70%,
+    #0a0612 100%
+  );
+  background-attachment: fixed;
   color: var(--foreground);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+/* Typography utilities */
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Apply heading font to all headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: 0.05em;
+}
+
+/* Decorative divider with sparkle */
+.divider {
+  width: 120px;
+  height: 1px;
+  background: var(--soft-purple);
+  margin: 3rem auto;
+  position: relative;
+}
+
+.divider::after {
+  content: "✧";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--soft-purple);
+  text-shadow: 0 0 12px var(--soft-purple);
+  background: #0a0612;
+  padding: 0 10px;
+  font-family: var(--font-body);
 }
 
 /* Custom scrollbar */
@@ -32,4 +84,16 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gold-hover);
+}
+
+/* Card backgrounds should be semi-transparent to show particles */
+.card-bg {
+  background: rgba(26, 10, 46, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+/* Ensure nav and sidebars have solid backgrounds */
+.nav-bg {
+  background: rgba(10, 6, 18, 0.95);
+  backdrop-filter: blur(12px);
 }

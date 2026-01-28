@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hidden Archives - Magical Background</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, 
+        #0a0612 0%, 
+        #1a0f2e 30%, 
+        #2c0046 50%,
+        #1a0f2e 70%,
+        #0a0612 100%
+      );
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      color: #f5f0e8;
+      overflow-x: hidden;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PARTICLE BACKGROUND CONTAINER
+       Sits behind everything, fixed to viewport
+    ═══════════════════════════════════════════════════════════════ */
+    .archives-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    #particle-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CONTENT LAYER (for demonstration)
+       Your actual sections go here with transparent backgrounds
+    ═══════════════════════════════════════════════════════════════ */
+  
+    /* Divider style from branding */
+    .divider {
+      width: 120px;
+      height: 1px;
+      background: #9d7cd8;
+      margin: 3rem auto;
+      position: relative;
+    }
+
+    .divider::after {
+      content: "✧";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #9d7cd8;
+      text-shadow: 0 0 12px #9d7cd8;
+      background: #0a0612;
+      padding: 0 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PARTICLE BACKGROUND LAYER -->
+  <div class="archives-bg">
+    <canvas id="particle-canvas"></canvas>
+  </div>
+
+  <!-- YOUR CONTENT SECTIONS (transparent backgrounds) -->
+
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // MAGICAL PARTICLE DUST
+    // Floating particles that drift naturally in random directions
+    // ═══════════════════════════════════════════════════════════════
+    
+    const particleCanvas = document.getElementById('particle-canvas');
+    const particleCtx = particleCanvas.getContext('2d');
+    
+    function resizeCanvas() {
+      particleCanvas.width = window.innerWidth;
+      particleCanvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    class Particle {
+      constructor() {
+        this.spawn();
+      }
+
+      spawn() {
+        // Spawn randomly anywhere on the canvas
+        this.x = Math.random() * particleCanvas.width;
+        this.y = Math.random() * particleCanvas.height;
+        
+        this.size = Math.random() * 2.5 + 0.5;
+        
+        // Very slow, gentle drift in random directions
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 0.15 + 0.03;
+        this.speedX = Math.cos(angle) * speed;
+        this.speedY = Math.sin(angle) * speed;
+        
+        this.opacity = Math.random() * 0.5 + 0.2;
+        this.maxOpacity = this.opacity;
+        
+        // Slow fade cycle
+        this.fadeSpeed = Math.random() * 0.0008 + 0.0003;
+        this.life = Math.random(); // Start at random point in lifecycle
+        this.fadeDirection = Math.random() > 0.5 ? 1 : -1;
+        
+        // Gentle wobble
+        this.wobbleSpeed = Math.random() * 0.008 + 0.003;
+        this.wobbleAmount = Math.random() * 0.3 + 0.1;
+        this.wobbleOffset = Math.random() * Math.PI * 2;
+        this.time = Math.random() * 1000;
+        
+        // Color variation: gold, light gold, or soft purple
+        const colorChoice = Math.random();
+        if (colorChoice < 0.5) {
+          this.color = { r: 212, g: 175, b: 55 }; // Primary gold
+        } else if (colorChoice < 0.75) {
+          this.color = { r: 240, g: 216, b: 117 }; // Light gold
+        } else {
+          this.color = { r: 157, g: 124, b: 216 }; // Soft purple
+        }
+      }
+
+      update() {
+        this.time += 1;
+        
+        // Gentle drift with subtle wobble
+        const wobbleX = Math.sin(this.time * this.wobbleSpeed + this.wobbleOffset) * this.wobbleAmount;
+        const wobbleY = Math.cos(this.time * this.wobbleSpeed * 0.7 + this.wobbleOffset) * this.wobbleAmount;
+        
+        this.x += this.speedX + wobbleX * 0.1;
+        this.y += this.speedY + wobbleY * 0.1;
+        
+        // Breathing opacity effect
+        this.life += this.fadeSpeed * this.fadeDirection;
+        
+        if (this.life >= 1) {
+          this.fadeDirection = -1;
+        } else if (this.life <= 0) {
+          this.fadeDirection = 1;
+        }
+        
+        // Smooth opacity based on life
+        this.currentOpacity = this.maxOpacity * (0.3 + this.life * 0.7);
+        
+        // Wrap around edges seamlessly
+        if (this.x < -20) this.x = particleCanvas.width + 20;
+        if (this.x > particleCanvas.width + 20) this.x = -20;
+        if (this.y < -20) this.y = particleCanvas.height + 20;
+        if (this.y > particleCanvas.height + 20) this.y = -20;
+      }
+
+      draw() {
+        const { r, g, b } = this.color;
+        
+        // Outer glow
+        const glowGradient = particleCtx.createRadialGradient(
+          this.x, this.y, 0,
+          this.x, this.y, this.size * 4
+        );
+        glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${this.currentOpacity * 0.25})`);
+        glowGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        
+        particleCtx.beginPath();
+        particleCtx.arc(this.x, this.y, this.size * 4, 0, Math.PI * 2);
+        particleCtx.fillStyle = glowGradient;
+        particleCtx.fill();
+
+        // Core particle
+        const coreGradient = particleCtx.createRadialGradient(
+          this.x, this.y, 0,
+          this.x, this.y, this.size
+        );
+        coreGradient.addColorStop(0, `rgba(255, 255, 255, ${this.currentOpacity})`);
+        coreGradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${this.currentOpacity})`);
+        coreGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        
+        particleCtx.beginPath();
+        particleCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        particleCtx.fillStyle = coreGradient;
+        particleCtx.fill();
+      }
+    }
+
+    // Create particle array
+    const particles = [];
+    const particleCount = Math.min(50, Math.floor(window.innerWidth / 30));
+    
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(new Particle());
+    }
+
+    function animate() {
+      particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+      
+      particles.forEach(particle => {
+        particle.update();
+        particle.draw();
+      });
+      
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Handle window resize for particle count
+    window.addEventListener('resize', () => {
+      const newCount = Math.min(50, Math.floor(window.innerWidth / 30));
+      while (particles.length < newCount) {
+        particles.push(new Particle());
+      }
+      while (particles.length > newCount) {
+        particles.pop();
+      }
+    });
+  </script>
+
+</body>
+</html>

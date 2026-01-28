@@ -1,6 +1,25 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Cinzel, Cormorant_Garamond } from "next/font/google";
+import ParticleBackground from "@/components/ParticleBackground";
 import "./globals.css";
+
+// Cinzel for headings - elegant display serif
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-cinzel",
+  display: "swap",
+});
+
+// Cormorant Garamond for body text - elegant readable serif
+const cormorantGaramond = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Everlore Hollow | Affiliate Portal",
@@ -28,8 +47,13 @@ export default function RootLayout({
         },
       }}
     >
-      <html lang="en">
-        <body className="antialiased">{children}</body>
+      <html lang="en" className={`${cinzel.variable} ${cormorantGaramond.variable}`}>
+        <body className="antialiased font-body">
+          <ParticleBackground />
+          <div className="relative z-10">
+            {children}
+          </div>
+        </body>
       </html>
     </ClerkProvider>
   );
