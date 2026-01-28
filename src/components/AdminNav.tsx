@@ -13,6 +13,7 @@ const navItems = [
   { href: "/admin/tiers", label: "Tiers", icon: "🏆" },
   { href: "/admin/activity", label: "Activity Log", icon: "📋" },
   { href: "/admin/errors", label: "Error Monitor", icon: "🚨" },
+  { href: "/admin/docs", label: "Documentation", icon: "📖" },
 ];
 
 export function AdminNav() {
