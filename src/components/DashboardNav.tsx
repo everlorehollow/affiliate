@@ -22,12 +22,12 @@ export function DashboardNav() {
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="relative w-64 min-h-screen bg-[#0a0612]/95 backdrop-blur-xl border-r border-[#d4af37]/20 p-4"
+      className="relative w-64 min-h-screen bg-[#0a0612]/95 backdrop-blur-xl border-r border-[#d4af37]/20 p-4 flex flex-col"
     >
       {/* Decorative gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#d4af37]/5 via-transparent to-[#9d7cd8]/5 pointer-events-none" />
 
-      <div className="relative">
+      <div className="relative flex-1 flex flex-col">
         {/* Logo Section */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -85,12 +85,15 @@ export function DashboardNav() {
           })}
         </ul>
 
+        {/* Spacer to push account to bottom */}
+        <div className="flex-1" />
+
         {/* User Section */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="absolute bottom-4 left-4 right-4"
+          className="mt-6"
         >
           <div className="flex items-center gap-3 px-4 py-3 bg-[#1a0a2e]/80 rounded-xl border border-[#d4af37]/20 backdrop-blur-sm hover:border-[#d4af37]/40 transition-all">
             <UserButton

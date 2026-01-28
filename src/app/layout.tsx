@@ -41,11 +41,61 @@ export default function RootLayout({
           colorBackground: "#1a0a2e",
           colorInputBackground: "#2c0046",
           colorText: "#f5f5f5",
+          colorTextSecondary: "#9d7cd8",
+          colorInputText: "#f5f5f5",
+          colorNeutral: "#f5f5f5",
         },
         elements: {
-          card: "bg-[#1a0a2e]",
-          formButtonPrimary: "bg-[#d4af37] hover:bg-[#b8962e] text-[#1a0a2e]",
-          formFieldInput: "bg-[#2c0046] border-[#d4af37]/30",
+          // Card and container styles
+          card: "bg-[#1a0a2e] border border-[#d4af37]/20",
+          rootBox: "text-[#f5f5f5]",
+
+          // Form elements
+          formButtonPrimary: "bg-[#d4af37] hover:bg-[#b8962e] text-[#1a0a2e] font-semibold",
+          formFieldInput: "bg-[#2c0046] border-[#d4af37]/30 text-[#f5f5f5]",
+          formFieldLabel: "text-[#f5f5f5]",
+          formFieldInputShowPasswordButton: "text-[#9d7cd8] hover:text-[#d4af37]",
+          formFieldInputShowPasswordIcon: "text-[#9d7cd8]",
+
+          // Social buttons (Google, etc.)
+          socialButtonsBlockButton: "bg-[#2c0046] border-[#d4af37]/30 text-[#f5f5f5] hover:bg-[#3d0060]",
+          socialButtonsBlockButtonText: "text-[#f5f5f5]",
+          socialButtonsProviderIcon: "brightness-0 invert",
+
+          // User button and profile
+          userButtonPopoverCard: "bg-[#1a0a2e] border border-[#d4af37]/20",
+          userButtonPopoverActions: "bg-[#1a0a2e]",
+          userButtonPopoverActionButton: "text-[#f5f5f5] hover:bg-[#2c0046]",
+          userButtonPopoverActionButtonText: "text-[#f5f5f5]",
+          userButtonPopoverActionButtonIcon: "text-[#9d7cd8]",
+          userButtonPopoverFooter: "hidden",
+          userPreviewMainIdentifier: "text-[#f5f5f5]",
+          userPreviewSecondaryIdentifier: "text-[#9d7cd8]",
+
+          // Profile and account pages
+          profileSectionPrimaryButton: "text-[#d4af37] hover:text-[#e5c04a]",
+          accordionTriggerButton: "text-[#f5f5f5]",
+          navbarButton: "text-[#f5f5f5] hover:text-[#d4af37]",
+
+          // General text elements
+          headerTitle: "text-[#d4af37]",
+          headerSubtitle: "text-[#9d7cd8]",
+          dividerLine: "bg-[#d4af37]/20",
+          dividerText: "text-[#9d7cd8]",
+          footerActionLink: "text-[#d4af37] hover:text-[#e5c04a]",
+          footerActionText: "text-[#9d7cd8]",
+          identityPreviewText: "text-[#f5f5f5]",
+          identityPreviewEditButton: "text-[#d4af37]",
+
+          // Alerts and badges
+          badge: "bg-[#d4af37]/20 text-[#d4af37]",
+          alertText: "text-[#f5f5f5]",
+
+          // Modal and menu
+          modalCloseButton: "text-[#9d7cd8] hover:text-[#d4af37]",
+          menuButton: "text-[#f5f5f5]",
+          menuList: "bg-[#1a0a2e] border border-[#d4af37]/20",
+          menuItem: "text-[#f5f5f5] hover:bg-[#2c0046]",
         },
       }}
     >
