@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Cinzel, Cormorant_Garamond } from "next/font/google";
 import ParticleBackground from "@/components/ParticleBackground";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 // Cinzel for headings - elegant display serif
@@ -49,10 +51,13 @@ export default function RootLayout({
     >
       <html lang="en" className={`${cinzel.variable} ${cormorantGaramond.variable}`}>
         <body className="antialiased font-body">
-          <ParticleBackground />
-          <div className="relative z-10">
-            {children}
-          </div>
+          <TooltipProvider>
+            <ParticleBackground />
+            <div className="relative z-10">
+              {children}
+            </div>
+            <Toaster />
+          </TooltipProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -97,3 +97,99 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(10, 6, 18, 0.95);
   backdrop-filter: blur(12px);
 }
+
+/* Shimmer animation for loading states and effects */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Gold glow effect */
+.glow-gold {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.glow-gold-strong {
+  box-shadow: 0 0 40px rgba(212, 175, 55, 0.5);
+}
+
+/* Purple glow effect */
+.glow-purple {
+  box-shadow: 0 0 20px rgba(157, 124, 216, 0.3);
+}
+
+.glow-purple-strong {
+  box-shadow: 0 0 40px rgba(157, 124, 216, 0.5);
+}
+
+/* Text glow effects */
+.text-glow-gold {
+  text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+}
+
+.text-glow-purple {
+  text-shadow: 0 0 15px rgba(157, 124, 216, 0.5);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #d4af37, #e5c04a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass morphism utilities */
+.glass {
+  background: rgba(26, 10, 46, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.glass-dark {
+  background: rgba(10, 6, 18, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+}
+
+/* Animated gradient border */
+.animated-border {
+  position: relative;
+  background: linear-gradient(var(--background), var(--background)) padding-box,
+              linear-gradient(135deg, #d4af37, #9d7cd8, #d4af37) border-box;
+  border: 1px solid transparent;
+  border-radius: 1rem;
+}
+
+/* Pulse animation for interactive elements */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(212, 175, 55, 0.5);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Focus ring for accessibility */
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for all interactive elements */
+button, a, input, select, textarea {
+  transition: all 0.2s ease;
+}
