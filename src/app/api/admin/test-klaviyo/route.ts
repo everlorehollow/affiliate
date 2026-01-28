@@ -33,22 +33,18 @@ export async function POST(request: NextRequest) {
   const testEmail = email || "test@everlore.com";
   const results: Record<string, { success: boolean; error?: string }> = {};
 
-  const testAffiliate = {
-    email: testEmail,
-    first_name: "Test",
-    last_name: "Affiliate",
-    referral_code: "TESTCODE",
-  };
-
   try {
     // Affiliate Signed Up
     if (event === "all" || event === "signup") {
       try {
         await trackKlaviyoEvent(async (klaviyo) => {
-          await klaviyo.trackAffiliateSignup({
-            affiliate: testAffiliate,
-            tier: "bronze",
-            commission_rate: 10,
+          await klaviyo.trackAffiliateSignedUp({
+            email: testEmail,
+            first_name: "Test",
+            last_name: "Affiliate",
+            referral_code: "TESTCODE",
+            instagram_handle: "@testaffiliate",
+            website_url: "https://example.com",
           });
         });
         results.signup = { success: true };
@@ -65,10 +61,12 @@ export async function POST(request: NextRequest) {
       try {
         await trackKlaviyoEvent(async (klaviyo) => {
           await klaviyo.trackAffiliateApproved({
-            affiliate: testAffiliate,
+            email: testEmail,
+            first_name: "Test",
+            last_name: "Affiliate",
+            referral_code: "TESTCODE",
             tier: "bronze",
             commission_rate: 10,
-            discount_code: "TESTCODE",
           });
         });
         results.approved = { success: true };
@@ -85,13 +83,24 @@ export async function POST(request: NextRequest) {
       try {
         await trackKlaviyoEvent(async (klaviyo) => {
           await klaviyo.trackAffiliateReferral({
-            affiliate: testAffiliate,
+            affiliate: {
+              email: testEmail,
+              first_name: "Test",
+              last_name: "Affiliate",
+              referral_code: "TESTCODE",
+              tier: "bronze",
+            },
             referral: {
+              id: "test-referral-123",
               order_number: "TEST-1234",
+              order_subtotal: 89.99,
               order_total: 99.99,
               commission_amount: 9.99,
+              commission_rate: 10,
               is_recurring: false,
+              order_source: "shopify",
             },
+            customer_email: "customer@example.com",
           });
         });
         results.referral = { success: true };
@@ -108,9 +117,13 @@ export async function POST(request: NextRequest) {
       try {
         await trackKlaviyoEvent(async (klaviyo) => {
           await klaviyo.trackAffiliateTierUpgrade({
-            affiliate: testAffiliate,
+            email: testEmail,
+            first_name: "Test",
+            last_name: "Affiliate",
+            referral_code: "TESTCODE",
             old_tier: "bronze",
             new_tier: "silver",
+            old_commission_rate: 10,
             new_commission_rate: 15,
             total_referrals: 10,
           });
@@ -129,7 +142,12 @@ export async function POST(request: NextRequest) {
       try {
         await trackKlaviyoEvent(async (klaviyo) => {
           await klaviyo.trackAffiliatePayoutSent({
-            affiliate: testAffiliate,
+            affiliate: {
+              email: testEmail,
+              first_name: "Test",
+              last_name: "Affiliate",
+              referral_code: "TESTCODE",
+            },
             payout: {
               id: "test-payout-123",
               amount: 50.00,
