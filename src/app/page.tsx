@@ -20,7 +20,7 @@ const benefits = [
   {
     icon: TrendingUp,
     title: "Recurring Commission",
-    description: "Earn 15-25% on every subscription including renewals. You keep earning as long as they stay.",
+    description: "Earn 10-20% on every subscription including renewals. You keep earning as long as they stay.",
   },
   {
     icon: BookOpen,
@@ -42,27 +42,32 @@ const benefits = [
 const tiers = [
   {
     name: "Initiate",
-    commission: "15%",
+    commission: "10%",
+    rate: 0.10,
     description: "Where every journey begins",
     requirement: "All partners",
     color: "from-[#9d7cd8] to-[#6b21a8]",
   },
   {
     name: "Adept",
-    commission: "20%",
+    commission: "15%",
+    rate: 0.15,
     description: "Proven storytellers",
     requirement: "6+ referrals",
     color: "from-[#d4af37] to-[#b8962e]",
   },
   {
     name: "Inner Circle",
-    commission: "25%",
+    commission: "20%",
+    rate: 0.20,
     description: "The trusted few",
     requirement: "16+ referrals",
     color: "from-[#e5c04a] to-[#d4af37]",
     featured: true,
   },
 ];
+
+const SUBSCRIPTION_PRICE = 50;
 
 const idealPartners = [
   "You're a Bookstagrammer or BookTok creator sharing fantasy reads",
@@ -72,9 +77,23 @@ const idealPartners = [
   "You're already a subscriber who can't stop talking about us (we see you)",
 ];
 
+// Calculate commission based on total referrals and tier
+function getCommissionRate(totalReferrals: number): { rate: number; tier: string } {
+  if (totalReferrals >= 16) {
+    return { rate: 0.20, tier: "Inner Circle" };
+  } else if (totalReferrals >= 6) {
+    return { rate: 0.15, tier: "Adept" };
+  }
+  return { rate: 0.10, tier: "Initiate" };
+}
+
 export default function Home() {
   const [sliderValue, setSliderValue] = useState(10);
-  const monthlyEarnings = sliderValue * 8; // $8 average commission per referral
+
+  // Calculate earnings based on $50 subscription and tier-based commission
+  const { rate, tier } = getCommissionRate(sliderValue);
+  const commissionPerReferral = SUBSCRIPTION_PRICE * rate;
+  const monthlyEarnings = sliderValue * commissionPerReferral;
   const yearlyEarnings = monthlyEarnings * 12;
 
   return (
@@ -281,6 +300,15 @@ export default function Home() {
             viewport={{ once: true }}
             className="p-8 rounded-2xl bg-[#1a0a2e]/60 border border-[#d4af37]/20 backdrop-blur-sm"
           >
+            {/* Tier indicator */}
+            <div className="text-center mb-6">
+              <span className="inline-block px-4 py-2 rounded-full bg-[#d4af37]/20 border border-[#d4af37]/30">
+                <span className="text-[#9d7cd8] font-body text-sm">Your Tier: </span>
+                <span className="text-[#d4af37] font-heading font-semibold">{tier}</span>
+                <span className="text-[#f5f5f5] font-body text-sm"> ({Math.round(rate * 100)}% commission)</span>
+              </span>
+            </div>
+
             <div className="mb-8">
               <label className="block text-[#f5f5f5] font-heading mb-4 text-center">
                 Monthly Referrals: <span className="text-[#d4af37] text-2xl font-bold">{sliderValue}</span>
@@ -300,6 +328,13 @@ export default function Home() {
                 <span>1</span>
                 <span>50</span>
               </div>
+            </div>
+
+            {/* Earnings breakdown */}
+            <div className="mb-6 p-4 rounded-xl bg-[#2c0046]/30 border border-[#9d7cd8]/20">
+              <p className="text-center text-[#9d7cd8] font-body text-sm">
+                ${SUBSCRIPTION_PRICE} subscription × {Math.round(rate * 100)}% = <span className="text-[#d4af37] font-semibold">${commissionPerReferral}</span> per referral
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
