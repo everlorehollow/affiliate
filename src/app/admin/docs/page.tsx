@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { KlaviyoTestButton } from "./KlaviyoTestButton";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
 
@@ -326,6 +327,18 @@ export default async function AdminDocsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Step 6: Test Events */}
+          <div>
+            <h3 className="text-lg font-semibold text-[#d4af37] mb-2">
+              6. Test Klaviyo Events
+            </h3>
+            <p className="text-gray-300 mb-4">
+              Send test events to Klaviyo to verify your integration and set up
+              Flows. Events will appear in Klaviyo Analytics → Metrics.
+            </p>
+            <KlaviyoTestButton />
           </div>
         </div>
       </section>
