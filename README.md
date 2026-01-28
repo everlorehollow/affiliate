@@ -768,15 +768,15 @@ Can use Supabase Studio for MVP, or build simple admin:
 ### Signup Fraud
 - [ ] IP rate limiting (max 3 signups per IP per day)
 - [ ] Email domain blocking (temp email services)
-- [ ] Manual approval requirement
+- [x] Manual approval requirement
 - [ ] CAPTCHA on signup form
 
 ### Referral Fraud
-- [ ] Self-referral blocking (affiliate email ≠ customer email)
+- [x] Self-referral blocking (affiliate email ≠ customer email)
 - [ ] Same household detection (same IP on signup and order)
 - [ ] Velocity checks (too many orders too fast)
 - [ ] 30-day hold period before commission is payable
-- [ ] Refund clawback
+- [x] Refund clawback
 
 ### Manual Monitoring
 - Weekly review of top affiliates
@@ -820,34 +820,34 @@ Useful patterns:
 ## Development Phases
 
 ### Phase 1: Foundation (Week 1)
-- [ ] Supabase project + schema
-- [ ] Clerk application
-- [ ] Shopify private app + webhook subscriptions
-- [ ] Recharge webhook subscriptions
-- [ ] Basic Edge Functions (order webhook, signup)
+- [x] Supabase project + schema
+- [x] Clerk application
+- [x] Shopify private app + webhook subscriptions
+- [x] Recharge webhook subscriptions
+- [x] Basic Edge Functions (order webhook, signup)
 
 ### Phase 2: Core Backend (Week 1-2)
-- [ ] Shopify order attribution
-- [ ] Recharge renewal attribution
-- [ ] Tier upgrade logic
-- [ ] Klaviyo event integration
-- [ ] Refund handling
+- [x] Shopify order attribution
+- [x] Recharge renewal attribution
+- [x] Tier upgrade logic
+- [x] Klaviyo event integration
+- [x] Refund handling
 
 ### Phase 3: Affiliate Portal (Week 2-3)
-- [ ] Next.js project setup
-- [ ] Clerk integration
-- [ ] Dashboard page
-- [ ] Referrals page
-- [ ] Settings page
-- [ ] Assets page
-- [ ] Mobile responsive
+- [x] Next.js project setup
+- [x] Clerk integration
+- [x] Dashboard page
+- [x] Referrals page
+- [x] Settings page
+- [x] Assets page
+- [x] Mobile responsive
 
 ### Phase 4: Admin + Payouts (Week 3-4)
-- [ ] Admin affiliate management
-- [ ] Admin referral management
-- [ ] PayPal Payouts integration
-- [ ] Payout batch generation
-- [ ] Payout tracking
+- [x] Admin affiliate management
+- [x] Admin referral management
+- [x] PayPal Payouts integration
+- [x] Payout batch generation
+- [x] Payout tracking
 
 ### Phase 5: Polish (Week 4)
 - [ ] Email templates in Klaviyo
@@ -861,42 +861,42 @@ Useful patterns:
 ## Testing Checklist
 
 ### Affiliate Signup
-- [ ] Form validation works
+- [x] Form validation works
 - [ ] Shopify discount code created
-- [ ] Affiliate record in database
-- [ ] Klaviyo event fires
-- [ ] Duplicate email rejected
+- [x] Affiliate record in database
+- [x] Klaviyo event fires
+- [x] Duplicate email rejected
 
 ### Order Attribution
-- [ ] Order with affiliate code → referral created
-- [ ] Commission calculated correctly
-- [ ] Affiliate stats updated
-- [ ] Tier upgrade triggers at threshold
-- [ ] Self-referral blocked
+- [x] Order with affiliate code → referral created
+- [x] Commission calculated correctly
+- [x] Affiliate stats updated
+- [x] Tier upgrade triggers at threshold
+- [x] Self-referral blocked
 
 ### Subscription Renewals
-- [ ] Recharge charge webhook received
-- [ ] Customer matched to affiliate
-- [ ] Recurring referral created
-- [ ] is_recurring = true
+- [x] Recharge charge webhook received
+- [x] Customer matched to affiliate
+- [x] Recurring referral created
+- [x] is_recurring = true
 
 ### Refunds
-- [ ] Refund webhook received
-- [ ] Referral status updated
-- [ ] Affiliate stats recalculated
+- [x] Refund webhook received
+- [x] Referral status updated
+- [x] Affiliate stats recalculated
 
 ### Payouts
-- [ ] Batch generation works
-- [ ] PayPal API accepts batch
-- [ ] Payout records created
-- [ ] Affiliate balance updated
+- [x] Batch generation works
+- [x] PayPal API accepts batch
+- [x] Payout records created
+- [x] Affiliate balance updated
 
 ### Portal
-- [ ] Login works
-- [ ] Stats display correctly
-- [ ] Referral history accurate
-- [ ] Payout history accurate
-- [ ] Code/link copy works
+- [x] Login works
+- [x] Stats display correctly
+- [x] Referral history accurate
+- [x] Payout history accurate
+- [x] Code/link copy works
 
 ---
 

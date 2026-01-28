@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
+import { trackKlaviyoEvent } from "@/lib/klaviyo";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
 
@@ -33,6 +34,13 @@ export async function POST(request: NextRequest) {
     updateData.approved_at = new Date().toISOString();
   }
 
+  // Get affiliate data before update for Klaviyo tracking
+  const { data: affiliate } = await supabase
+    .from("affiliates")
+    .select("*")
+    .eq("id", affiliateId)
+    .single();
+
   const { error } = await supabase
     .from("affiliates")
     .update(updateData)
@@ -49,6 +57,20 @@ export async function POST(request: NextRequest) {
     action: status === "approved" ? "approved" : `status_changed_${status}`,
     details: { changed_by: userId, new_status: status },
   });
+
+  // Track approval event in Klaviyo
+  if (status === "approved" && affiliate) {
+    await trackKlaviyoEvent(async (klaviyo) => {
+      await klaviyo.trackAffiliateApproved({
+        email: affiliate.email,
+        first_name: affiliate.first_name,
+        last_name: affiliate.last_name,
+        referral_code: affiliate.referral_code,
+        tier: affiliate.tier,
+        commission_rate: affiliate.commission_rate,
+      });
+    });
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
+import { trackKlaviyoEvent } from "@/lib/klaviyo";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
 
@@ -74,6 +75,40 @@ export async function POST(request: NextRequest) {
     await supabase.rpc("recalculate_affiliate_stats", {
       affiliate_uuid: currentPayout.affiliate_id,
     });
+
+    // Get affiliate for Klaviyo tracking
+    const { data: affiliate } = await supabase
+      .from("affiliates")
+      .select("email, first_name, last_name, referral_code, paypal_email")
+      .eq("id", currentPayout.affiliate_id)
+      .single();
+
+    // Track payout in Klaviyo
+    if (affiliate) {
+      // Get full payout data including method
+      const { data: fullPayout } = await supabase
+        .from("payouts")
+        .select("method, paypal_email")
+        .eq("id", payoutId)
+        .single();
+
+      await trackKlaviyoEvent(async (klaviyo) => {
+        await klaviyo.trackAffiliatePayoutSent({
+          affiliate: {
+            email: affiliate.email,
+            first_name: affiliate.first_name,
+            last_name: affiliate.last_name,
+            referral_code: affiliate.referral_code,
+          },
+          payout: {
+            id: payoutId,
+            amount: currentPayout.amount,
+            method: fullPayout?.method || "manual",
+            paypal_email: fullPayout?.paypal_email || affiliate.paypal_email,
+          },
+        });
+      });
+    }
   }
 
   // Log the action

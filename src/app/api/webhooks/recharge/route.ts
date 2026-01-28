@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createServerClient } from "@/lib/supabase";
+import { trackKlaviyoEvent } from "@/lib/klaviyo";
 
 // Verify Recharge webhook signature
 function verifyRechargeWebhook(
@@ -152,6 +153,30 @@ async function handleChargeSuccess(charge: any, supabase: any) {
     console.error("Failed to create recurring referral:", referralError);
     throw referralError;
   }
+
+  // Track recurring referral event in Klaviyo
+  await trackKlaviyoEvent(async (klaviyo) => {
+    await klaviyo.trackAffiliateReferral({
+      affiliate: {
+        email: affiliate.email,
+        first_name: affiliate.first_name,
+        last_name: affiliate.last_name,
+        referral_code: affiliate.referral_code,
+        tier: affiliate.tier,
+      },
+      referral: {
+        id: chargeId,
+        order_number: charge.shopify_order_id?.toString() || chargeId,
+        order_subtotal: orderSubtotal,
+        order_total: orderTotal,
+        commission_amount: commissionAmount,
+        commission_rate: commissionRate,
+        is_recurring: true,
+        order_source: "recharge",
+      },
+      customer_email: customerEmail,
+    });
+  });
 
   console.log(
     `Recurring referral created: Charge ${chargeId}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}`

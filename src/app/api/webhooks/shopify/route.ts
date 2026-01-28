@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createServerClient } from "@/lib/supabase";
+import { trackKlaviyoEvent } from "@/lib/klaviyo";
 
 // Verify Shopify webhook signature
 function verifyShopifyWebhook(
@@ -162,6 +163,30 @@ async function handleOrderPaid(order: any, supabase: any) {
     console.error("Failed to create referral:", referralError);
     throw referralError;
   }
+
+  // Track referral event in Klaviyo
+  await trackKlaviyoEvent(async (klaviyo) => {
+    await klaviyo.trackAffiliateReferral({
+      affiliate: {
+        email: affiliate.email,
+        first_name: affiliate.first_name,
+        last_name: affiliate.last_name,
+        referral_code: affiliate.referral_code,
+        tier: affiliate.tier,
+      },
+      referral: {
+        id: order.id.toString(),
+        order_number: order.name || order.order_number?.toString(),
+        order_subtotal: orderSubtotal,
+        order_total: parseFloat(order.total_price),
+        commission_amount: commissionAmount,
+        commission_rate: commissionRate,
+        is_recurring: false,
+        order_source: "shopify",
+      },
+      customer_email: customerEmail,
+    });
+  });
 
   console.log(
     `Referral created: Order ${order.name}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}`
