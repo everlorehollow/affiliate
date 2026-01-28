@@ -680,10 +680,13 @@ const response = await paypal.payout.create(payout);
 ## Affiliate Portal (Frontend)
 
 ### Tech Stack
-- **Framework:** Next.js 14+ (App Router)
+- **Framework:** Next.js 16.1.6 (App Router)
 - **Auth:** Clerk
 - **Styling:** Tailwind CSS (match Everlore dark fantasy aesthetic)
 - **Data Fetching:** Supabase client
+- **Rate Limiting:** Upstash Redis
+- **CAPTCHA:** hCaptcha
+- **Validation:** Zod
 
 ### Pages
 
@@ -765,23 +768,78 @@ Can use Supabase Studio for MVP, or build simple admin:
 
 ## Fraud Prevention
 
-### Signup Fraud
-- [ ] IP rate limiting (max 3 signups per IP per day)
-- [ ] Email domain blocking (temp email services)
-- [x] Manual approval requirement
-- [ ] CAPTCHA on signup form
+### Implemented Security Features
 
-### Referral Fraud
+#### Rate Limiting (Upstash Redis)
+- [x] **Webhook endpoints:** 100 requests/minute
+- [x] **Admin API endpoints:** 30 requests/minute
+- [x] **Affiliate portal API:** 20 requests/minute
+- [x] **Auth endpoints:** 5 requests/minute
+- [x] Returns `429 Too Many Requests` with `Retry-After` header
+
+#### CAPTCHA (hCaptcha)
+- [x] Server-side token verification
+- [x] React component for forms (`src/components/HCaptcha.tsx`)
+- [x] Verification endpoint (`/api/verify-captcha`)
+
+#### Input Validation (Zod)
+- [x] Email format validation
+- [x] Disposable email domain blocking (10,000+ domains)
+- [x] URL validation (HTTPS only)
+- [x] Text field sanitization (XSS prevention)
+- [x] UUID format validation
+
+#### Signup Fraud
+- [x] IP rate limiting
+- [x] Email domain blocking (temp email services)
+- [x] Manual approval requirement
+- [x] CAPTCHA on signup form (component ready)
+- [x] IP clustering detection (multiple affiliates from same IP)
+- [x] Similar email pattern detection
+
+#### Referral Fraud
 - [x] Self-referral blocking (affiliate email ≠ customer email)
-- [ ] Same household detection (same IP on signup and order)
-- [ ] Velocity checks (too many orders too fast)
-- [ ] 30-day hold period before commission is payable
+- [x] IP tracking on all requests
+- [x] Velocity checks (>10 referrals/hour flagged)
+- [x] Discount code abuse detection (>20 uses/day flagged)
+- [x] Activity spike detection (dormant accounts)
+- [x] 30-day hold period before commission is payable
 - [x] Refund clawback
+
+#### Fraud Detection & Logging
+- [x] Fraud scoring system (0-100, flags at 30+)
+- [x] Activity logging with IP address and user agent
+- [x] Webhook activity tracking
+- [x] Admin action logging
+- [x] Fraud flags logged to `activity_log` table
+
+### Fraud Detection Files
+| File | Purpose |
+|------|---------|
+| `src/lib/rate-limit.ts` | Rate limiter configuration |
+| `src/lib/fraud-detection.ts` | Pattern detection & scoring |
+| `src/lib/activity-log.ts` | Enhanced activity logging |
+| `src/lib/validation/schemas.ts` | Zod validation schemas |
+| `src/lib/validation/email.ts` | Disposable email checker |
+| `src/lib/hcaptcha.ts` | hCaptcha server verification |
+| `src/components/HCaptcha.tsx` | CAPTCHA React component |
+| `src/proxy.ts` | Rate limiting middleware |
+
+### Environment Variables Required
+```env
+# Upstash Redis (for rate limiting)
+UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AXxxxxxxxxxxxx
+
+# hCaptcha
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+HCAPTCHA_SECRET_KEY=0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
 
 ### Manual Monitoring
 - Weekly review of top affiliates
-- Flag orders from same IP as affiliate
-- Monitor for suspicious patterns
+- Check `activity_log` for `fraud_flag` actions
+- Monitor Upstash dashboard for rate limit analytics
 
 ---
 
@@ -851,9 +909,9 @@ Useful patterns:
 
 ### Phase 5: Polish (Week 4)
 - [ ] Email templates in Klaviyo
-- [ ] Fraud prevention rules
+- [x] Fraud prevention rules (rate limiting, CAPTCHA, validation, detection)
 - [ ] Testing with real transactions
-- [ ] Documentation
+- [x] Documentation
 - [ ] Monitoring/alerting setup
 
 ---
@@ -922,5 +980,20 @@ Useful patterns:
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 1.1*
 *Last Updated: January 2025*
+
+---
+
+## Changelog
+
+### v1.1 (January 2025)
+- Updated to Next.js 16.1.6
+- Migrated from `middleware.ts` to `proxy.ts` (Next.js 16 convention)
+- Added comprehensive fraud prevention system:
+  - Upstash Redis rate limiting
+  - hCaptcha integration
+  - Zod input validation
+  - Disposable email blocking
+  - Fraud pattern detection & scoring
+  - Enhanced activity logging with IP/user-agent tracking
