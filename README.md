@@ -862,7 +862,7 @@ Useful patterns:
 
 ### Affiliate Signup
 - [x] Form validation works
-- [ ] Shopify discount code created
+- [x] Shopify discount code created (on approval)
 - [x] Affiliate record in database
 - [x] Klaviyo event fires
 - [x] Duplicate email rejected

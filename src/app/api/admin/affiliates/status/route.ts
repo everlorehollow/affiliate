@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
+import { createAffiliateDiscount } from "@/lib/shopify";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
 
@@ -34,12 +35,53 @@ export async function POST(request: NextRequest) {
     updateData.approved_at = new Date().toISOString();
   }
 
-  // Get affiliate data before update for Klaviyo tracking
+  // Get affiliate data before update
   const { data: affiliate } = await supabase
     .from("affiliates")
     .select("*")
     .eq("id", affiliateId)
     .single();
+
+  if (!affiliate) {
+    return NextResponse.json({ error: "Affiliate not found" }, { status: 404 });
+  }
+
+  // If approving, create Shopify discount code first
+  let shopifyDiscountId: number | null = null;
+  if (status === "approved" && !affiliate.shopify_discount_id) {
+    const affiliateName = [affiliate.first_name, affiliate.last_name]
+      .filter(Boolean)
+      .join(" ") || affiliate.email;
+
+    const discountResult = await createAffiliateDiscount(
+      affiliate.referral_code,
+      affiliateName,
+      10 // 10% discount for customers
+    );
+
+    if (!discountResult.success) {
+      console.error("Failed to create Shopify discount:", discountResult.error);
+      return NextResponse.json(
+        { error: `Failed to create Shopify discount: ${discountResult.error}` },
+        { status: 500 }
+      );
+    }
+
+    shopifyDiscountId = discountResult.priceRuleId!;
+    updateData.shopify_discount_id = shopifyDiscountId.toString();
+    updateData.discount_code = discountResult.code!;
+
+    // Log discount creation
+    await supabase.from("activity_log").insert({
+      affiliate_id: affiliateId,
+      action: "shopify_discount_created",
+      details: {
+        price_rule_id: discountResult.priceRuleId,
+        discount_code_id: discountResult.discountCodeId,
+        code: discountResult.code,
+      },
+    });
+  }
 
   const { error } = await supabase
     .from("affiliates")
@@ -55,11 +97,15 @@ export async function POST(request: NextRequest) {
   await supabase.from("activity_log").insert({
     affiliate_id: affiliateId,
     action: status === "approved" ? "approved" : `status_changed_${status}`,
-    details: { changed_by: userId, new_status: status },
+    details: {
+      changed_by: userId,
+      new_status: status,
+      shopify_discount_created: !!shopifyDiscountId,
+    },
   });
 
   // Track approval event in Klaviyo
-  if (status === "approved" && affiliate) {
+  if (status === "approved") {
     await trackKlaviyoEvent(async (klaviyo) => {
       await klaviyo.trackAffiliateApproved({
         email: affiliate.email,
@@ -72,5 +118,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    shopifyDiscountCreated: !!shopifyDiscountId,
+  });
 }
