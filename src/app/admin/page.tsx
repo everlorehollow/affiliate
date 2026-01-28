@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AdminLayout } from "@/components/AdminLayout";
 import { StatsCard } from "@/components/StatsCard";
 import { createServerClient } from "@/lib/supabase";
+import { getUnresolvedErrorCounts } from "@/lib/error-log";
 import Link from "next/link";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
@@ -49,6 +50,9 @@ export default async function AdminOverviewPage() {
   const totalCommission = affiliatesWithStats?.reduce((sum, a) => sum + (a.total_commission_earned || 0), 0) || 0;
   const totalOwed = affiliatesWithStats?.reduce((sum, a) => sum + (a.balance_owed || 0), 0) || 0;
 
+  // Fetch error counts
+  const errorCounts = await getUnresolvedErrorCounts();
+
   return (
     <AdminLayout>
       <div className="space-y-8">
@@ -57,6 +61,40 @@ export default async function AdminOverviewPage() {
           <h1 className="text-3xl font-bold text-red-500">Admin Overview</h1>
           <p className="text-gray-400 mt-1">Manage your affiliate program</p>
         </div>
+
+        {/* Error Alert */}
+        {errorCounts.total > 0 && (
+          <div className={`${
+            errorCounts.critical > 0
+              ? "bg-red-500/10 border-red-500/30"
+              : "bg-orange-500/10 border-orange-500/30"
+          } border rounded-lg p-4 flex items-center justify-between`}>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{errorCounts.critical > 0 ? "🚨" : "⚠️"}</span>
+              <div>
+                <p className={`${errorCounts.critical > 0 ? "text-red-400" : "text-orange-400"} font-medium`}>
+                  {errorCounts.total} unresolved system error{errorCounts.total !== 1 ? "s" : ""}
+                  {errorCounts.critical > 0 && ` (${errorCounts.critical} critical)`}
+                </p>
+                <p className="text-sm text-gray-400">
+                  {errorCounts.error > 0 && `${errorCounts.error} errors`}
+                  {errorCounts.error > 0 && errorCounts.warning > 0 && ", "}
+                  {errorCounts.warning > 0 && `${errorCounts.warning} warnings`}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/admin/errors"
+              className={`px-4 py-2 ${
+                errorCounts.critical > 0
+                  ? "bg-red-500 hover:bg-red-400"
+                  : "bg-orange-500 hover:bg-orange-400"
+              } text-black rounded-lg transition-colors font-medium`}
+            >
+              View Errors
+            </Link>
+          </div>
+        )}
 
         {/* Quick Actions */}
         {(pendingAffiliates || 0) > 0 && (

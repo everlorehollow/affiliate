@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { createAffiliatePayout, AffiliatePayoutData } from "@/lib/paypal";
+import { logPayPalError } from "@/lib/error-log";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
 
@@ -67,6 +68,21 @@ export async function POST(request: NextRequest) {
 
     if (!paypalResult.success) {
       console.error("PayPal payout failed:", paypalResult.error);
+
+      // Log to error monitor
+      await logPayPalError(request, paypalResult.error || "PayPal payout failed", {
+        request_payload: {
+          affiliate_count: affiliates.length,
+          total_amount: affiliates.reduce((sum, a) => sum + a.balance_owed, 0),
+          batch_id: batchId,
+        },
+        http_status: 500,
+        details: {
+          affiliate_ids: affiliateIds,
+          created_by: userId,
+        },
+      });
+
       return NextResponse.json({
         error: paypalResult.error || "PayPal payout failed",
       }, { status: 500 });
@@ -86,6 +102,22 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error("Error creating payout records:", insertError);
+
+      // Log critical error - PayPal was charged but we failed to record
+      await logPayPalError(request, "Payout sent to PayPal but failed to record in database", {
+        request_payload: {
+          paypal_batch_id: paypalResult.batchId,
+          affiliate_count: affiliates.length,
+        },
+        http_status: 500,
+        details: {
+          severity: "critical",
+          database_error: insertError.message,
+          affiliate_ids: affiliateIds,
+          amounts: affiliates.map(a => ({ id: a.id, amount: a.balance_owed })),
+        },
+      });
+
       // Note: PayPal batch was created, but we failed to record it
       return NextResponse.json({
         error: "Payout sent to PayPal but failed to record. PayPal batch ID: " + paypalResult.batchId,

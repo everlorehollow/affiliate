@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createServerClient } from "@/lib/supabase";
 import { isPayoutItemSuccess } from "@/lib/paypal";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
+import { logWebhookError } from "@/lib/error-log";
 
 /**
  * PayPal Webhook Handler
@@ -110,6 +111,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("PayPal webhook processing error:", error);
+
+    // Log to activity log
     await supabase.from("activity_log").insert({
       action: "paypal_webhook_error",
       details: {
@@ -118,6 +121,22 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
       },
     });
+
+    // Log to error monitor
+    await logWebhookError(request, "paypal_webhook", error instanceof Error ? error : String(error), {
+      endpoint: "/api/webhooks/paypal",
+      request_payload: {
+        event_type: event.event_type,
+        event_id: event.id,
+        resource_type: event.resource_type,
+      },
+      http_status: 500,
+      details: {
+        batch_id: event.resource?.batch_header?.payout_batch_id,
+        payout_item_id: event.resource?.payout_item_id,
+      },
+    });
+
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }
 }

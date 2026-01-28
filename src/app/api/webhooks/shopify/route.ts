@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
 import { logWebhookActivity, extractClientIp, extractUserAgent } from "@/lib/activity-log";
 import { checkReferralFraud } from "@/lib/fraud-detection";
+import { logWebhookError } from "@/lib/error-log";
 
 // Verify Shopify webhook signature
 function verifyShopifyWebhook(
@@ -69,10 +70,24 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    // Log to activity log
     await logWebhookActivity(request, "shopify", topic || "unknown", false, {
       order_id: order?.id,
       error: error instanceof Error ? error.message : String(error),
     });
+
+    // Log to error monitor
+    await logWebhookError(request, "shopify_webhook", error instanceof Error ? error : String(error), {
+      endpoint: `/api/webhooks/shopify (${topic})`,
+      order_id: order?.id?.toString(),
+      request_payload: { topic, order_id: order?.id, order_name: order?.name },
+      http_status: 500,
+      details: {
+        discount_codes: order?.discount_codes,
+        customer_email: order?.customer?.email,
+      },
+    });
+
     return NextResponse.json(
       { error: "Processing failed" },
       { status: 500 }

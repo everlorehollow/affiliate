@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
 import { logWebhookActivity, extractClientIp, extractUserAgent } from "@/lib/activity-log";
 import { checkReferralFraud } from "@/lib/fraud-detection";
+import { logWebhookError } from "@/lib/error-log";
 
 // Verify Recharge webhook signature
 function verifyRechargeWebhook(
@@ -55,9 +56,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Recharge webhook processing error:", error);
+
+    // Log to activity log
     await logWebhookActivity(request, "recharge", "processing_error", false, {
       error: error instanceof Error ? error.message : String(error),
     });
+
+    // Log to error monitor
+    const charge = payload.charge || payload;
+    await logWebhookError(request, "recharge_webhook", error instanceof Error ? error : String(error), {
+      endpoint: "/api/webhooks/recharge",
+      order_id: charge?.id?.toString(),
+      request_payload: {
+        charge_id: charge?.id,
+        status: charge?.status,
+        customer_id: charge?.customer_id,
+      },
+      http_status: 500,
+      details: {
+        customer_email: charge?.email,
+        shopify_customer_id: charge?.shopify_customer_id,
+      },
+    });
+
     return NextResponse.json(
       { error: "Processing failed" },
       { status: 500 }
