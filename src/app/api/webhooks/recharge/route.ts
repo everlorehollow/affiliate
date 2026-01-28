@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createServerClient } from "@/lib/supabase";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
+import { logWebhookActivity, extractClientIp, extractUserAgent } from "@/lib/activity-log";
+import { checkReferralFraud } from "@/lib/fraud-detection";
 
 // Verify Recharge webhook signature
 function verifyRechargeWebhook(
@@ -27,6 +29,9 @@ export async function POST(request: NextRequest) {
   const secret = process.env.RECHARGE_WEBHOOK_SECRET;
   if (secret && !verifyRechargeWebhook(body, signature, secret)) {
     console.error("Invalid Recharge webhook signature");
+    await logWebhookActivity(request, "recharge", "invalid_signature", false, {
+      signature,
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -38,14 +43,21 @@ export async function POST(request: NextRequest) {
     const charge = payload.charge || payload;
 
     if (charge.status === "SUCCESS" || charge.status === "PAID") {
-      await handleChargeSuccess(charge, supabase);
+      await handleChargeSuccess(charge, supabase, request);
     } else if (charge.status === "REFUNDED") {
-      await handleChargeRefund(charge, supabase);
+      await handleChargeRefund(charge, supabase, request);
     }
+
+    await logWebhookActivity(request, "recharge", charge.status || "unknown", true, {
+      charge_id: charge?.id,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Recharge webhook processing error:", error);
+    await logWebhookActivity(request, "recharge", "processing_error", false, {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
       { error: "Processing failed" },
       { status: 500 }
@@ -53,7 +65,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleChargeSuccess(charge: any, supabase: any) {
+async function handleChargeSuccess(charge: any, supabase: any, request: NextRequest) {
   const chargeId = charge.id?.toString();
   const customerEmail = charge.email?.toLowerCase();
   const rechargeCustomerId = charge.customer_id;
@@ -133,6 +145,17 @@ async function handleChargeSuccess(charge: any, supabase: any) {
   const commissionRate = affiliate.commission_rate;
   const commissionAmount = orderSubtotal * commissionRate;
 
+  // Fraud detection check for recurring charges
+  const fraudCheck = await checkReferralFraud(
+    request,
+    affiliate.id,
+    customerEmail || "",
+    orderTotal,
+    affiliate.discount_code || ""
+  );
+
+  const fraudFlagged = fraudCheck.flagged;
+
   // Create referral record (recurring)
   const { error: referralError } = await supabase.from("referrals").insert({
     affiliate_id: affiliate.id,
@@ -152,6 +175,25 @@ async function handleChargeSuccess(charge: any, supabase: any) {
   if (referralError) {
     console.error("Failed to create recurring referral:", referralError);
     throw referralError;
+  }
+
+  // Log fraud flag if detected
+  if (fraudFlagged) {
+    await supabase.from("activity_log").insert({
+      affiliate_id: affiliate.id,
+      action: "recurring_referral_fraud_flagged",
+      details: {
+        charge_id: chargeId,
+        fraud_score: fraudCheck.score,
+        fraud_reasons: fraudCheck.reasons,
+        customer_email: customerEmail,
+        order_total: orderTotal,
+        timestamp: new Date().toISOString(),
+      },
+      ip_address: extractClientIp(request),
+      user_agent: extractUserAgent(request),
+    });
+    console.log(`Recurring referral flagged for review: Charge ${chargeId}, Score: ${fraudCheck.score}`);
   }
 
   // Track recurring referral event in Klaviyo
@@ -179,11 +221,11 @@ async function handleChargeSuccess(charge: any, supabase: any) {
   });
 
   console.log(
-    `Recurring referral created: Charge ${chargeId}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}`
+    `Recurring referral created: Charge ${chargeId}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}${fraudFlagged ? " [FLAGGED]" : ""}`
   );
 }
 
-async function handleChargeRefund(charge: any, supabase: any) {
+async function handleChargeRefund(charge: any, supabase: any, request: NextRequest) {
   const chargeId = charge.id?.toString();
   if (!chargeId) return;
 
@@ -202,6 +244,18 @@ async function handleChargeRefund(charge: any, supabase: any) {
   // Only update if not already paid out
   if (referral.status === "paid") {
     console.log("Referral already paid, flagging for manual review:", chargeId);
+    await supabase.from("activity_log").insert({
+      affiliate_id: referral.affiliate_id,
+      action: "refund_on_paid_recurring_referral",
+      details: {
+        referral_id: referral.id,
+        charge_id: chargeId,
+        commission_amount: referral.commission_amount,
+        timestamp: new Date().toISOString(),
+      },
+      ip_address: extractClientIp(request),
+      user_agent: extractUserAgent(request),
+    });
     return;
   }
 
@@ -210,6 +264,12 @@ async function handleChargeRefund(charge: any, supabase: any) {
     .from("referrals")
     .update({ status: "refunded" })
     .eq("id", referral.id);
+
+  await logWebhookActivity(request, "recharge", "refund_processed", true, {
+    referral_id: referral.id,
+    charge_id: chargeId,
+    commission_amount: referral.commission_amount,
+  });
 
   console.log("Recurring referral marked as refunded:", chargeId);
 }

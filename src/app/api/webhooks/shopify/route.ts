@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createServerClient } from "@/lib/supabase";
 import { trackKlaviyoEvent } from "@/lib/klaviyo";
+import { logWebhookActivity, extractClientIp, extractUserAgent } from "@/lib/activity-log";
+import { checkReferralFraud } from "@/lib/fraud-detection";
 
 // Verify Shopify webhook signature
 function verifyShopifyWebhook(
@@ -25,6 +27,8 @@ export async function POST(request: NextRequest) {
   const topic = request.headers.get("x-shopify-topic");
 
   const supabase = createServerClient();
+  const clientIp = extractClientIp(request);
+  const userAgent = extractUserAgent(request);
 
   // Log all incoming webhooks for debugging
   await supabase.from("activity_log").insert({
@@ -35,14 +39,16 @@ export async function POST(request: NextRequest) {
       body_preview: body.substring(0, 500),
       timestamp: new Date().toISOString(),
     },
+    ip_address: clientIp,
+    user_agent: userAgent,
   });
 
   // Verify webhook signature
   const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
   if (secret && !verifyShopifyWebhook(body, signature, secret)) {
-    await supabase.from("activity_log").insert({
-      action: "shopify_webhook_invalid_signature",
-      details: { topic, signature, timestamp: new Date().toISOString() },
+    await logWebhookActivity(request, "shopify", "invalid_signature", false, {
+      topic,
+      signature,
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
@@ -52,21 +58,20 @@ export async function POST(request: NextRequest) {
   try {
     // Handle different webhook topics
     if (topic === "orders/paid" || topic === "orders/create") {
-      await handleOrderPaid(order, supabase);
+      await handleOrderPaid(order, supabase, request);
     } else if (topic === "refunds/create") {
-      await handleRefund(order, supabase);
+      await handleRefund(order, supabase, request);
     }
+
+    await logWebhookActivity(request, "shopify", topic || "unknown", true, {
+      order_id: order?.id,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    await supabase.from("activity_log").insert({
-      action: "shopify_webhook_error",
-      details: {
-        topic,
-        error: error instanceof Error ? error.message : String(error),
-        order_id: order?.id,
-        timestamp: new Date().toISOString()
-      },
+    await logWebhookActivity(request, "shopify", topic || "unknown", false, {
+      order_id: order?.id,
+      error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
       { error: "Processing failed" },
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleOrderPaid(order: any, supabase: any) {
+async function handleOrderPaid(order: any, supabase: any, request: NextRequest) {
   // Check if order has a discount code
   const discountCodes = order.discount_codes || [];
   if (discountCodes.length === 0) {
@@ -102,6 +107,11 @@ async function handleOrderPaid(order: any, supabase: any) {
   const customerEmail = order.customer?.email?.toLowerCase();
   if (customerEmail === affiliate.email.toLowerCase()) {
     console.log("Self-referral blocked for:", customerEmail);
+    await logWebhookActivity(request, "shopify", "self_referral_blocked", false, {
+      affiliate_id: affiliate.id,
+      customer_email: customerEmail,
+      order_id: order.id,
+    });
     return;
   }
 
@@ -117,6 +127,24 @@ async function handleOrderPaid(order: any, supabase: any) {
     return;
   }
 
+  // Calculate order totals for fraud check
+  const orderSubtotal = parseFloat(order.subtotal_price || order.total_line_items_price || order.total_price);
+  const orderTotal = parseFloat(order.total_price);
+
+  // Fraud detection check
+  const fraudCheck = await checkReferralFraud(
+    request,
+    affiliate.id,
+    customerEmail || "",
+    orderTotal,
+    discountCode
+  );
+
+  // Determine initial status based on fraud check
+  // If flagged, set to pending for manual review; otherwise still pending for normal flow
+  const initialStatus = "pending";
+  const fraudFlagged = fraudCheck.flagged;
+
   // Create or get referred customer record
   const { data: customer } = await supabase
     .from("referred_customers")
@@ -127,7 +155,7 @@ async function handleOrderPaid(order: any, supabase: any) {
         affiliate_id: affiliate.id,
         first_order_id: order.id,
         first_order_date: order.created_at,
-        first_order_total: parseFloat(order.total_price),
+        first_order_total: orderTotal,
       },
       {
         onConflict: "shopify_customer_id",
@@ -138,8 +166,6 @@ async function handleOrderPaid(order: any, supabase: any) {
     .single();
 
   // Calculate commission
-  // Use subtotal (excludes shipping/tax)
-  const orderSubtotal = parseFloat(order.subtotal_price || order.total_line_items_price || order.total_price);
   const commissionRate = affiliate.commission_rate;
   const commissionAmount = orderSubtotal * commissionRate;
 
@@ -152,16 +178,36 @@ async function handleOrderPaid(order: any, supabase: any) {
     order_number: order.name || order.order_number?.toString(),
     order_date: order.created_at,
     order_subtotal: orderSubtotal,
-    order_total: parseFloat(order.total_price),
+    order_total: orderTotal,
     commission_rate: commissionRate,
     commission_amount: commissionAmount,
-    status: "pending",
+    status: initialStatus,
     is_recurring: false,
   });
 
   if (referralError) {
     console.error("Failed to create referral:", referralError);
     throw referralError;
+  }
+
+  // Log fraud flag if detected (for admin review)
+  if (fraudFlagged) {
+    await supabase.from("activity_log").insert({
+      affiliate_id: affiliate.id,
+      action: "referral_fraud_flagged",
+      details: {
+        order_id: order.id,
+        fraud_score: fraudCheck.score,
+        fraud_reasons: fraudCheck.reasons,
+        discount_code: discountCode,
+        customer_email: customerEmail,
+        order_total: orderTotal,
+        timestamp: new Date().toISOString(),
+      },
+      ip_address: extractClientIp(request),
+      user_agent: extractUserAgent(request),
+    });
+    console.log(`Referral flagged for review: Order ${order.id}, Score: ${fraudCheck.score}, Reasons: ${fraudCheck.reasons.join(", ")}`);
   }
 
   // Track referral event in Klaviyo
@@ -178,7 +224,7 @@ async function handleOrderPaid(order: any, supabase: any) {
         id: order.id.toString(),
         order_number: order.name || order.order_number?.toString(),
         order_subtotal: orderSubtotal,
-        order_total: parseFloat(order.total_price),
+        order_total: orderTotal,
         commission_amount: commissionAmount,
         commission_rate: commissionRate,
         is_recurring: false,
@@ -189,11 +235,11 @@ async function handleOrderPaid(order: any, supabase: any) {
   });
 
   console.log(
-    `Referral created: Order ${order.name}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}`
+    `Referral created: Order ${order.name}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}${fraudFlagged ? " [FLAGGED]" : ""}`
   );
 }
 
-async function handleRefund(refund: any, supabase: any) {
+async function handleRefund(refund: any, supabase: any, request: NextRequest) {
   const orderId = refund.order_id?.toString();
   if (!orderId) return;
 
@@ -212,7 +258,18 @@ async function handleRefund(refund: any, supabase: any) {
   // Only update if not already paid out
   if (referral.status === "paid") {
     console.log("Referral already paid, flagging for manual review:", orderId);
-    // Could add a flag or notification here
+    await supabase.from("activity_log").insert({
+      affiliate_id: referral.affiliate_id,
+      action: "refund_on_paid_referral",
+      details: {
+        referral_id: referral.id,
+        order_id: orderId,
+        commission_amount: referral.commission_amount,
+        timestamp: new Date().toISOString(),
+      },
+      ip_address: extractClientIp(request),
+      user_agent: extractUserAgent(request),
+    });
     return;
   }
 
@@ -221,6 +278,12 @@ async function handleRefund(refund: any, supabase: any) {
     .from("referrals")
     .update({ status: "refunded" })
     .eq("id", referral.id);
+
+  await logWebhookActivity(request, "shopify", "refund_processed", true, {
+    referral_id: referral.id,
+    order_id: orderId,
+    commission_amount: referral.commission_amount,
+  });
 
   console.log("Referral marked as refunded:", orderId);
 }
