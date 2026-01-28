@@ -310,3 +310,74 @@ export function mapPayPalStatus(
 export function isPayoutItemSuccess(transactionStatus: string): boolean {
   return transactionStatus === "SUCCESS";
 }
+
+/**
+ * Map PayPal item status to our internal status
+ */
+export function mapPayPalItemStatus(
+  transactionStatus: string
+): "pending" | "processing" | "completed" | "failed" {
+  switch (transactionStatus) {
+    case "SUCCESS":
+      return "completed";
+    case "FAILED":
+    case "RETURNED":
+    case "BLOCKED":
+    case "REFUNDED":
+    case "REVERSED":
+      return "failed";
+    case "UNCLAIMED":
+    case "ONHOLD":
+    case "PENDING":
+    default:
+      return "processing";
+  }
+}
+
+/**
+ * Check status of a payout batch and return item-level details
+ */
+export async function checkPayoutBatchStatus(
+  batchId: string
+): Promise<{
+  success: boolean;
+  batchStatus?: string;
+  items?: Array<{
+    affiliateId: string;
+    payoutItemId: string;
+    transactionStatus: string;
+    internalStatus: "pending" | "processing" | "completed" | "failed";
+    error?: string;
+  }>;
+  error?: string;
+}> {
+  const client = getPayPalClient();
+
+  if (!client) {
+    return { success: false, error: "PayPal not configured" };
+  }
+
+  try {
+    const response = await client.getPayoutStatus(batchId);
+
+    const items = response.items.map((item) => ({
+      affiliateId: item.payout_item.sender_item_id,
+      payoutItemId: item.payout_item_id,
+      transactionStatus: item.transaction_status,
+      internalStatus: mapPayPalItemStatus(item.transaction_status),
+      error: item.errors?.message,
+    }));
+
+    return {
+      success: true,
+      batchStatus: response.batch_header.batch_status,
+      items,
+    };
+  } catch (error) {
+    console.error("PayPal status check error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown PayPal error",
+    };
+  }
+}
