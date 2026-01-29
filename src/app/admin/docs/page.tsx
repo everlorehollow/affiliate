@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { AdminLayout } from "@/components/AdminLayout";
 import { KlaviyoTestButton } from "./KlaviyoTestButton";
 
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS?.split(",") || [];
@@ -12,6 +13,7 @@ export default async function AdminDocsPage() {
   }
 
   return (
+    <AdminLayout>
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-red-500">Documentation</h1>
@@ -600,5 +602,6 @@ export default async function AdminDocsPage() {
         </div>
       </section>
     </div>
+    </AdminLayout>
   );
 }

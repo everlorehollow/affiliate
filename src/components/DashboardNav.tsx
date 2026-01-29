@@ -12,6 +12,7 @@ const navItems = [
   { href: "/payouts", label: "Payouts", icon: "💰" },
   { href: "/assets", label: "Assets", icon: "📁" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
+  { href: "/help", label: "Help", icon: "❓" },
 ];
 
 export function DashboardNav() {
