@@ -23,13 +23,14 @@ export function AffiliatesTable({ affiliates }: AffiliatesTableProps) {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update status");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update status");
       }
 
       router.refresh();
     } catch (error) {
       console.error("Error updating status:", error);
-      alert("Failed to update status");
+      alert(error instanceof Error ? error.message : "Failed to update status");
     } finally {
       setLoading(null);
     }
