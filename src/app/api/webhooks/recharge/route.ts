@@ -241,6 +241,30 @@ async function handleChargeSuccess(charge: any, supabase: any, request: NextRequ
     });
   });
 
+  // Check if the referral insert triggered a tier upgrade (via DB trigger)
+  const { data: updatedAffiliate } = await supabase
+    .from("affiliates")
+    .select("tier, commission_rate, total_referrals")
+    .eq("id", affiliate.id)
+    .single();
+
+  if (updatedAffiliate && updatedAffiliate.tier !== affiliate.tier) {
+    await trackKlaviyoEvent(async (klaviyo) => {
+      await klaviyo.trackAffiliateTierUpgrade({
+        email: affiliate.email,
+        first_name: affiliate.first_name,
+        last_name: affiliate.last_name,
+        referral_code: affiliate.referral_code,
+        old_tier: affiliate.tier,
+        new_tier: updatedAffiliate.tier,
+        old_commission_rate: affiliate.commission_rate,
+        new_commission_rate: updatedAffiliate.commission_rate,
+        total_referrals: updatedAffiliate.total_referrals,
+      });
+    });
+    console.log(`Tier upgrade: ${affiliate.referral_code} ${affiliate.tier} -> ${updatedAffiliate.tier}`);
+  }
+
   console.log(
     `Recurring referral created: Charge ${chargeId}, Affiliate ${affiliate.referral_code}, Commission $${commissionAmount.toFixed(2)}${fraudFlagged ? " [FLAGGED]" : ""}`
   );

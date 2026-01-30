@@ -92,6 +92,8 @@ class KlaviyoClient {
     first_name?: string;
     last_name?: string;
     referral_code: string;
+    commission_rate?: number;
+    tier?: string;
     instagram_handle?: string;
     tiktok_handle?: string;
     youtube_channel?: string;
@@ -110,6 +112,9 @@ class KlaviyoClient {
       },
       properties: {
         referral_code: affiliate.referral_code,
+        commission_rate: affiliate.commission_rate ?? 0.10,
+        tier: affiliate.tier ?? "initiate",
+        affiliate_link: `https://everlorehollow.com/?ref=${affiliate.referral_code}`,
         instagram_handle: affiliate.instagram_handle,
         tiktok_handle: affiliate.tiktok_handle,
         youtube_channel: affiliate.youtube_channel,
@@ -145,6 +150,7 @@ class KlaviyoClient {
         referral_code: affiliate.referral_code,
         tier: affiliate.tier,
         commission_rate: affiliate.commission_rate,
+        affiliate_link: `https://everlorehollow.com/?ref=${affiliate.referral_code}`,
         approved_date: new Date().toISOString(),
       },
     });
@@ -254,8 +260,8 @@ class KlaviyoClient {
       },
       properties: {
         payout_id: data.payout.id,
-        payout_amount: data.payout.amount,
-        payout_method: data.payout.method,
+        amount: data.payout.amount,
+        method: data.payout.method,
         paypal_email: data.payout.paypal_email,
         referral_code: data.affiliate.referral_code,
         payout_date: new Date().toISOString(),

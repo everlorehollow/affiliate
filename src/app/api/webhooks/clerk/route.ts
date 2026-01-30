@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { createServerClient } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity-log";
+import { trackKlaviyoEvent } from "@/lib/klaviyo";
 import crypto from "crypto";
 
 // Generate a unique referral code from the user's name or email
@@ -163,6 +164,16 @@ async function handleUserCreated(userData: any, supabase: any) {
       source: "clerk_webhook",
       timestamp: new Date().toISOString(),
     },
+  });
+
+  // Track signup event in Klaviyo
+  await trackKlaviyoEvent(async (klaviyo) => {
+    await klaviyo.trackAffiliateSignedUp({
+      email: email.toLowerCase(),
+      first_name: firstName || undefined,
+      last_name: lastName || undefined,
+      referral_code: referralCode,
+    });
   });
 
   console.log(`New affiliate created: ${email}, code: ${referralCode}, clerk: ${clerkUserId}`);
