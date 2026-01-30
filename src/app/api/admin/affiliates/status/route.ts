@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   // If approving, create Shopify discount code first
-  let shopifyDiscountId: number | null = null;
+  let shopifyDiscountCreated = false;
   if (status === "approved" && !affiliate.shopify_discount_id) {
     const affiliateName = [affiliate.first_name, affiliate.last_name]
       .filter(Boolean)
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    shopifyDiscountId = discountResult.priceRuleId!;
-    updateData.shopify_discount_id = shopifyDiscountId;
+    shopifyDiscountCreated = true;
+    updateData.shopify_discount_id = discountResult.discountId!;
     updateData.discount_code = discountResult.code!;
 
     // Log discount creation
@@ -76,8 +76,7 @@ export async function POST(request: NextRequest) {
       affiliate_id: affiliateId,
       action: "shopify_discount_created",
       details: {
-        price_rule_id: discountResult.priceRuleId,
-        discount_code_id: discountResult.discountCodeId,
+        discount_id: discountResult.discountId,
         code: discountResult.code,
       },
     });
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest) {
     details: {
       changed_by: userId,
       new_status: status,
-      shopify_discount_created: !!shopifyDiscountId,
+      shopify_discount_created: shopifyDiscountCreated,
     },
   });
 
@@ -120,6 +119,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    shopifyDiscountCreated: !!shopifyDiscountId,
+    shopifyDiscountCreated,
   });
 }

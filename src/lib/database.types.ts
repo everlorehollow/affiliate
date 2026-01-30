@@ -21,7 +21,7 @@ export interface Database {
           commission_rate: number;
           referral_code: string;
           discount_code: string | null;
-          shopify_discount_id: number | null;
+          shopify_discount_id: string | null;
           paypal_email: string | null;
           instagram_handle: string | null;
           tiktok_handle: string | null;

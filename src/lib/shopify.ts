@@ -1,13 +1,12 @@
 /**
  * Shopify Admin API Client
- * Documentation: https://shopify.dev/docs/api/admin-rest
+ * Documentation: https://shopify.dev/docs/api/admin-graphql
  *
  * Handles discount code creation for approved affiliates.
- * Uses the Price Rules + Discount Codes API.
+ * Uses the GraphQL Admin API with discountCodeBasicCreate mutation.
  *
  * Authentication: Uses an offline access token obtained via the
  * Authorization Code Grant flow and stored in the shopify_tokens table.
- * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/authorization-code-grant
  */
 
 import { createServerClient } from "@/lib/supabase";
@@ -18,33 +17,9 @@ interface ShopifyConfig {
   apiVersion: string;
 }
 
-interface PriceRule {
-  id: number;
-  title: string;
-  target_type: string;
-  target_selection: string;
-  allocation_method: string;
-  value_type: string;
-  value: string;
-  customer_selection: string;
-  starts_at: string;
-  ends_at: string | null;
-  usage_limit: number | null;
-  once_per_customer: boolean;
-}
-
-interface DiscountCode {
-  id: number;
-  price_rule_id: number;
-  code: string;
-  usage_count: number;
-  created_at: string;
-}
-
 interface CreateDiscountResult {
   success: boolean;
-  priceRuleId?: number;
-  discountCodeId?: number;
+  discountId?: string;
   code?: string;
   error?: string;
 }
@@ -56,112 +31,220 @@ export class ShopifyClient {
     this.config = config;
   }
 
-  private get baseUrl(): string {
-    return `https://${this.config.shopDomain}/admin/api/${this.config.apiVersion}`;
+  private get graphqlUrl(): string {
+    return `https://${this.config.shopDomain}/admin/api/${this.config.apiVersion}/graphql.json`;
   }
 
-  private async request<T>(
-    method: string,
-    endpoint: string,
-    body?: unknown
-  ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method,
+  private async graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    const response = await fetch(this.graphqlUrl, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Shopify-Access-Token": this.config.accessToken,
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: JSON.stringify({ query, variables }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Shopify API error:", response.status, errorText);
+      console.error("Shopify GraphQL error:", response.status, errorText);
       throw new Error(`Shopify API error: ${response.status} - ${errorText}`);
     }
 
-    return response.json();
+    const result = await response.json();
+
+    if (result.errors?.length) {
+      const errorMsg = result.errors.map((e: { message: string }) => e.message).join(", ");
+      console.error("Shopify GraphQL errors:", result.errors);
+      throw new Error(`Shopify GraphQL error: ${errorMsg}`);
+    }
+
+    return result.data;
   }
 
   /**
-   * Create a price rule for an affiliate discount
-   *
-   * Note: For subscriptions (Recharge), this discount applies to the first order only.
-   * Recharge handles recurring charges separately - the affiliate code won't auto-apply
-   * to renewals, which is the desired behavior.
+   * Create a discount code using the GraphQL Admin API.
+   * Supports both one-time purchases and subscriptions.
    */
-  async createPriceRule(params: {
+  async createDiscountCode(params: {
     title: string;
+    code: string;
     discountPercentage: number;
-    startsAt?: Date;
-    endsAt?: Date | null;
-    usageLimit?: number | null;
-    oncePerCustomer?: boolean;
+    appliesOncePerCustomer?: boolean;
+    appliesOnSubscription?: boolean;
+    appliesOnOneTimePurchase?: boolean;
     combinesWithProductDiscounts?: boolean;
     combinesWithShippingDiscounts?: boolean;
-  }): Promise<PriceRule> {
-    const response = await this.request<{ price_rule: PriceRule }>(
-      "POST",
-      "/price_rules.json",
-      {
-        price_rule: {
-          title: params.title,
-          target_type: "line_item",
-          target_selection: "all",
-          allocation_method: "across",
-          value_type: "percentage",
-          value: `-${params.discountPercentage}`,
-          customer_selection: "all",
-          starts_at: (params.startsAt || new Date()).toISOString(),
-          ends_at: params.endsAt?.toISOString() || null,
-          usage_limit: params.usageLimit ?? null,
-          once_per_customer: params.oncePerCustomer ?? true,
-          combines_with_product_discounts: params.combinesWithProductDiscounts ?? true,
-          combines_with_shipping_discounts: params.combinesWithShippingDiscounts ?? true,
-        },
+    combinesWithOrderDiscounts?: boolean;
+  }): Promise<{ id: string; code: string }> {
+    const mutation = `
+      mutation CreateDiscountCode($basicCodeDiscount: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+          codeDiscountNode {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+            }
+          }
+          userErrors {
+            field
+            code
+            message
+          }
+        }
       }
-    );
+    `;
 
-    return response.price_rule;
-  }
-
-  /**
-   * Create a discount code for a price rule
-   */
-  async createDiscountCode(
-    priceRuleId: number,
-    code: string
-  ): Promise<DiscountCode> {
-    const response = await this.request<{ discount_code: DiscountCode }>(
-      "POST",
-      `/price_rules/${priceRuleId}/discount_codes.json`,
-      {
-        discount_code: {
-          code: code.toUpperCase(),
+    const variables = {
+      basicCodeDiscount: {
+        title: params.title,
+        code: params.code.toUpperCase(),
+        startsAt: new Date().toISOString(),
+        appliesOncePerCustomer: params.appliesOncePerCustomer ?? true,
+        customerSelection: {
+          all: true,
         },
+        customerGets: {
+          value: {
+            percentage: params.discountPercentage / 100,
+          },
+          items: {
+            all: true,
+          },
+          appliesOnSubscription: params.appliesOnSubscription ?? true,
+          appliesOnOneTimePurchase: params.appliesOnOneTimePurchase ?? true,
+        },
+        combinesWith: {
+          productDiscounts: params.combinesWithProductDiscounts ?? true,
+          shippingDiscounts: params.combinesWithShippingDiscounts ?? true,
+          orderDiscounts: params.combinesWithOrderDiscounts ?? false,
+        },
+      },
+    };
+
+    const data = await this.graphql<{
+      discountCodeBasicCreate: {
+        codeDiscountNode: {
+          id: string;
+          codeDiscount: {
+            title: string;
+            codes: { nodes: { code: string }[] };
+          };
+        } | null;
+        userErrors: { field: string[]; code: string; message: string }[];
+      };
+    }>(mutation, variables);
+
+    const result = data.discountCodeBasicCreate;
+
+    if (result.userErrors?.length) {
+      const errorMsg = result.userErrors.map((e) => e.message).join(", ");
+      throw new Error(`Shopify discount error: ${errorMsg}`);
+    }
+
+    if (!result.codeDiscountNode) {
+      throw new Error("Shopify returned no discount node");
+    }
+
+    return {
+      id: result.codeDiscountNode.id,
+      code: result.codeDiscountNode.codeDiscount.codes.nodes[0]?.code || params.code.toUpperCase(),
+    };
+  }
+
+  /**
+   * Delete a discount code by its GID
+   */
+  async deleteDiscount(discountId: string): Promise<void> {
+    const mutation = `
+      mutation DeleteDiscount($id: ID!) {
+        discountCodeDelete(id: $id) {
+          deletedCodeDiscountId
+          userErrors {
+            field
+            code
+            message
+          }
+        }
       }
-    );
+    `;
 
-    return response.discount_code;
+    const data = await this.graphql<{
+      discountCodeDelete: {
+        deletedCodeDiscountId: string | null;
+        userErrors: { field: string[]; code: string; message: string }[];
+      };
+    }>(mutation, { id: discountId });
+
+    if (data.discountCodeDelete.userErrors?.length) {
+      const errorMsg = data.discountCodeDelete.userErrors.map((e) => e.message).join(", ");
+      throw new Error(`Shopify delete error: ${errorMsg}`);
+    }
   }
 
   /**
-   * Delete a price rule (and its associated discount codes)
+   * Look up a discount code to check if it already exists
    */
-  async deletePriceRule(priceRuleId: number): Promise<void> {
-    await this.request("DELETE", `/price_rules/${priceRuleId}.json`);
-  }
+  async lookupDiscountCode(code: string): Promise<{ id: string; code: string } | null> {
+    const query = `
+      query LookupDiscount($query: String!) {
+        codeDiscountNodes(first: 1, query: $query) {
+          nodes {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+              ... on DiscountCodeBxgy {
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+              ... on DiscountCodeFreeShipping {
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
 
-  /**
-   * Get a discount code by code string
-   */
-  async lookupDiscountCode(code: string): Promise<DiscountCode | null> {
     try {
-      const response = await this.request<{ discount_codes: DiscountCode[] }>(
-        "GET",
-        `/discount_codes/lookup.json?code=${encodeURIComponent(code)}`
-      );
-      return response.discount_codes?.[0] || null;
+      const data = await this.graphql<{
+        codeDiscountNodes: {
+          nodes: {
+            id: string;
+            codeDiscount: {
+              codes: { nodes: { code: string }[] };
+            };
+          }[];
+        };
+      }>(query, { query: `code:${code}` });
+
+      const node = data.codeDiscountNodes.nodes[0];
+      if (!node) return null;
+
+      return {
+        id: node.id,
+        code: node.codeDiscount.codes.nodes[0]?.code || code,
+      };
     } catch {
       return null;
     }
@@ -205,7 +288,12 @@ export async function getShopifyClient(): Promise<ShopifyClient | null> {
 
 /**
  * Create an affiliate discount code in Shopify
- * Creates both the price rule and the discount code
+ *
+ * Discount behavior:
+ * - Works on both one-time purchases and subscriptions
+ * - Can be combined with product and shipping discounts
+ * - Each customer can only use it once
+ * - Unlimited total uses across all customers
  */
 export async function createAffiliateDiscount(
   referralCode: string,
@@ -230,25 +318,22 @@ export async function createAffiliateDiscount(
       };
     }
 
-    const priceRule = await client.createPriceRule({
+    const discount = await client.createDiscountCode({
       title: `Affiliate - ${affiliateName} (${referralCode})`,
+      code: referralCode,
       discountPercentage,
-      oncePerCustomer: true,
-      usageLimit: null,
+      appliesOncePerCustomer: true,
+      appliesOnSubscription: true,
+      appliesOnOneTimePurchase: true,
       combinesWithProductDiscounts: true,
       combinesWithShippingDiscounts: true,
+      combinesWithOrderDiscounts: false,
     });
-
-    const discountCode = await client.createDiscountCode(
-      priceRule.id,
-      referralCode
-    );
 
     return {
       success: true,
-      priceRuleId: priceRule.id,
-      discountCodeId: discountCode.id,
-      code: discountCode.code,
+      discountId: discount.id,
+      code: discount.code,
     };
   } catch (error) {
     console.error("Failed to create Shopify discount:", error);
@@ -263,7 +348,7 @@ export async function createAffiliateDiscount(
  * Delete an affiliate's discount code from Shopify
  */
 export async function deleteAffiliateDiscount(
-  priceRuleId: number
+  discountId: string
 ): Promise<{ success: boolean; error?: string }> {
   const client = await getShopifyClient();
 
@@ -275,7 +360,7 @@ export async function deleteAffiliateDiscount(
   }
 
   try {
-    await client.deletePriceRule(priceRuleId);
+    await client.deleteDiscount(discountId);
     return { success: true };
   } catch (error) {
     console.error("Failed to delete Shopify discount:", error);
