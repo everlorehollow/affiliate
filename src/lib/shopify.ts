@@ -169,7 +169,7 @@ let shopifyClient: ShopifyClient | null = null;
 export function getShopifyClient(): ShopifyClient | null {
   // Support both naming conventions
   const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
-  const accessToken = process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || process.env.SHOPIFY_ACCESS_TOKEN;
   const apiVersion = process.env.SHOPIFY_API_VERSION || "2024-01";
 
   if (!shopDomain || !accessToken) {

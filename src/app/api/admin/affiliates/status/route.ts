@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServerClient();
 
-  const updateData: Record<string, string | null> = {
+  const updateData: Record<string, string | number | null> = {
     status,
     updated_at: new Date().toISOString(),
   };
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     shopifyDiscountId = discountResult.priceRuleId!;
-    updateData.shopify_discount_id = shopifyDiscountId.toString();
+    updateData.shopify_discount_id = shopifyDiscountId;
     updateData.discount_code = discountResult.code!;
 
     // Log discount creation
