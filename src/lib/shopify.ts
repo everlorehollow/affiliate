@@ -5,15 +5,16 @@
  * Handles discount code creation for approved affiliates.
  * Uses the Price Rules + Discount Codes API.
  *
- * Authentication: Uses the Client Credentials Grant flow
- * (tokens expire every 24 hours and are refreshed automatically).
- * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant
+ * Authentication: Uses an offline access token obtained via the
+ * Authorization Code Grant flow and stored in the shopify_tokens table.
+ * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/authorization-code-grant
  */
+
+import { createServerClient } from "@/lib/supabase";
 
 interface ShopifyConfig {
   shopDomain: string;
-  clientId: string;
-  clientSecret: string;
+  accessToken: string;
   apiVersion: string;
 }
 
@@ -48,49 +49,6 @@ interface CreateDiscountResult {
   error?: string;
 }
 
-// Cached token state
-let cachedAccessToken: string | null = null;
-let tokenExpiresAt: number = 0;
-
-/**
- * Obtain an Admin API access token using the Client Credentials Grant flow.
- * Tokens are cached and refreshed when they expire (every ~24 hours).
- */
-async function getAccessToken(shopDomain: string, clientId: string, clientSecret: string): Promise<string> {
-  // Return cached token if still valid (with 5 minute buffer)
-  if (cachedAccessToken && Date.now() < tokenExpiresAt - 5 * 60 * 1000) {
-    return cachedAccessToken;
-  }
-
-  const response = await fetch(
-    `https://${shopDomain}/admin/oauth/access_token`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      }).toString(),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Failed to obtain Shopify access token:", response.status, errorText);
-    throw new Error(`Failed to obtain Shopify access token: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  cachedAccessToken = data.access_token;
-  // expires_in is in seconds (typically 86399 = ~24 hours)
-  tokenExpiresAt = Date.now() + (data.expires_in || 86399) * 1000;
-
-  return cachedAccessToken!;
-}
-
 export class ShopifyClient {
   private config: ShopifyConfig;
 
@@ -107,17 +65,11 @@ export class ShopifyClient {
     endpoint: string,
     body?: unknown
   ): Promise<T> {
-    const accessToken = await getAccessToken(
-      this.config.shopDomain,
-      this.config.clientId,
-      this.config.clientSecret
-    );
-
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method,
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": accessToken,
+        "X-Shopify-Access-Token": this.config.accessToken,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -125,31 +77,6 @@ export class ShopifyClient {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Shopify API error:", response.status, errorText);
-
-      // If we got a 401, the token may have expired early — clear cache and retry once
-      if (response.status === 401 && cachedAccessToken) {
-        cachedAccessToken = null;
-        tokenExpiresAt = 0;
-        const freshToken = await getAccessToken(
-          this.config.shopDomain,
-          this.config.clientId,
-          this.config.clientSecret
-        );
-        const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Access-Token": freshToken,
-          },
-          body: body ? JSON.stringify(body) : undefined,
-        });
-        if (!retryResponse.ok) {
-          const retryError = await retryResponse.text();
-          throw new Error(`Shopify API error: ${retryResponse.status} - ${retryError}`);
-        }
-        return retryResponse.json();
-      }
-
       throw new Error(`Shopify API error: ${response.status} - ${errorText}`);
     }
 
@@ -183,13 +110,12 @@ export class ShopifyClient {
           target_selection: "all",
           allocation_method: "across",
           value_type: "percentage",
-          value: `-${params.discountPercentage}`, // Negative for discount
+          value: `-${params.discountPercentage}`,
           customer_selection: "all",
           starts_at: (params.startsAt || new Date()).toISOString(),
           ends_at: params.endsAt?.toISOString() || null,
           usage_limit: params.usageLimit ?? null,
-          once_per_customer: params.oncePerCustomer ?? true, // Each customer can only use once
-          // Combination settings (Shopify Plus or 2024+ API)
+          once_per_customer: params.oncePerCustomer ?? true,
           combines_with_product_discounts: params.combinesWithProductDiscounts ?? true,
           combines_with_shipping_discounts: params.combinesWithShippingDiscounts ?? true,
         },
@@ -242,57 +168,60 @@ export class ShopifyClient {
   }
 }
 
-// Singleton instance
-let shopifyClient: ShopifyClient | null = null;
-
-export function getShopifyClient(): ShopifyClient | null {
+/**
+ * Get a Shopify client using the stored OAuth access token from the database.
+ * Returns null if no token is stored (app not yet installed via OAuth).
+ */
+export async function getShopifyClient(): Promise<ShopifyClient | null> {
   const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
-  const clientId = process.env.SHOPIFY_CLIENT_ID || process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || process.env.SHOPIFY_ACCESS_TOKEN;
   const apiVersion = process.env.SHOPIFY_API_VERSION || "2024-01";
 
-  if (!shopDomain || !clientId || !clientSecret) {
-    console.warn("Shopify credentials not configured - discount codes will not be created");
+  if (!shopDomain) {
+    console.warn("SHOPIFY_STORE_DOMAIN not configured");
     return null;
   }
 
-  if (!shopifyClient) {
-    shopifyClient = new ShopifyClient({
-      shopDomain,
-      clientId,
-      clientSecret,
-      apiVersion,
-    });
+  const supabase = createServerClient();
+  const { data: tokenRecord, error } = await supabase
+    .from("shopify_tokens")
+    .select("access_token")
+    .eq("shop_domain", shopDomain)
+    .single();
+
+  if (error || !tokenRecord?.access_token) {
+    console.warn(
+      "No Shopify access token found in database. " +
+      "Visit /api/shopify/install to connect the Shopify app."
+    );
+    return null;
   }
 
-  return shopifyClient;
+  return new ShopifyClient({
+    shopDomain,
+    accessToken: tokenRecord.access_token,
+    apiVersion,
+  });
 }
 
 /**
  * Create an affiliate discount code in Shopify
  * Creates both the price rule and the discount code
- *
- * Discount behavior:
- * - Works on both single products and subscriptions
- * - Can be combined with other discounts (product & shipping)
- * - Each customer can only use it once (first purchase only)
- * - For subscriptions: only applies to first charge, not recurring renewals
- *   (Recharge handles renewals separately without reapplying checkout discounts)
- * - Unlimited total uses across all customers
  */
 export async function createAffiliateDiscount(
   referralCode: string,
   affiliateName: string,
   discountPercentage: number = 10
 ): Promise<CreateDiscountResult> {
-  const client = getShopifyClient();
+  const client = await getShopifyClient();
 
   if (!client) {
-    return { success: false, error: "Shopify not configured" };
+    return {
+      success: false,
+      error: "Shopify not connected. Visit /api/shopify/install to connect.",
+    };
   }
 
   try {
-    // Check if code already exists
     const existing = await client.lookupDiscountCode(referralCode);
     if (existing) {
       return {
@@ -301,17 +230,15 @@ export async function createAffiliateDiscount(
       };
     }
 
-    // Create price rule with affiliate-specific settings
     const priceRule = await client.createPriceRule({
       title: `Affiliate - ${affiliateName} (${referralCode})`,
       discountPercentage,
-      oncePerCustomer: true, // Customer can only use once (first order only)
-      usageLimit: null, // Unlimited total uses across all customers
-      combinesWithProductDiscounts: true, // Can stack with product discounts
-      combinesWithShippingDiscounts: true, // Can stack with shipping discounts
+      oncePerCustomer: true,
+      usageLimit: null,
+      combinesWithProductDiscounts: true,
+      combinesWithShippingDiscounts: true,
     });
 
-    // Create discount code
     const discountCode = await client.createDiscountCode(
       priceRule.id,
       referralCode
@@ -338,10 +265,13 @@ export async function createAffiliateDiscount(
 export async function deleteAffiliateDiscount(
   priceRuleId: number
 ): Promise<{ success: boolean; error?: string }> {
-  const client = getShopifyClient();
+  const client = await getShopifyClient();
 
   if (!client) {
-    return { success: false, error: "Shopify not configured" };
+    return {
+      success: false,
+      error: "Shopify not connected. Visit /api/shopify/install to connect.",
+    };
   }
 
   try {
