@@ -4,11 +4,16 @@
  *
  * Handles discount code creation for approved affiliates.
  * Uses the Price Rules + Discount Codes API.
+ *
+ * Authentication: Uses the Client Credentials Grant flow
+ * (tokens expire every 24 hours and are refreshed automatically).
+ * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant
  */
 
 interface ShopifyConfig {
   shopDomain: string;
-  accessToken: string;
+  clientId: string;
+  clientSecret: string;
   apiVersion: string;
 }
 
@@ -43,6 +48,49 @@ interface CreateDiscountResult {
   error?: string;
 }
 
+// Cached token state
+let cachedAccessToken: string | null = null;
+let tokenExpiresAt: number = 0;
+
+/**
+ * Obtain an Admin API access token using the Client Credentials Grant flow.
+ * Tokens are cached and refreshed when they expire (every ~24 hours).
+ */
+async function getAccessToken(shopDomain: string, clientId: string, clientSecret: string): Promise<string> {
+  // Return cached token if still valid (with 5 minute buffer)
+  if (cachedAccessToken && Date.now() < tokenExpiresAt - 5 * 60 * 1000) {
+    return cachedAccessToken;
+  }
+
+  const response = await fetch(
+    `https://${shopDomain}/admin/oauth/access_token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }).toString(),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Failed to obtain Shopify access token:", response.status, errorText);
+    throw new Error(`Failed to obtain Shopify access token: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  cachedAccessToken = data.access_token;
+  // expires_in is in seconds (typically 86399 = ~24 hours)
+  tokenExpiresAt = Date.now() + (data.expires_in || 86399) * 1000;
+
+  return cachedAccessToken!;
+}
+
 export class ShopifyClient {
   private config: ShopifyConfig;
 
@@ -59,11 +107,17 @@ export class ShopifyClient {
     endpoint: string,
     body?: unknown
   ): Promise<T> {
+    const accessToken = await getAccessToken(
+      this.config.shopDomain,
+      this.config.clientId,
+      this.config.clientSecret
+    );
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method,
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": this.config.accessToken,
+        "X-Shopify-Access-Token": accessToken,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -71,6 +125,31 @@ export class ShopifyClient {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Shopify API error:", response.status, errorText);
+
+      // If we got a 401, the token may have expired early — clear cache and retry once
+      if (response.status === 401 && cachedAccessToken) {
+        cachedAccessToken = null;
+        tokenExpiresAt = 0;
+        const freshToken = await getAccessToken(
+          this.config.shopDomain,
+          this.config.clientId,
+          this.config.clientSecret
+        );
+        const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": freshToken,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (!retryResponse.ok) {
+          const retryError = await retryResponse.text();
+          throw new Error(`Shopify API error: ${retryResponse.status} - ${retryError}`);
+        }
+        return retryResponse.json();
+      }
+
       throw new Error(`Shopify API error: ${response.status} - ${errorText}`);
     }
 
@@ -167,12 +246,12 @@ export class ShopifyClient {
 let shopifyClient: ShopifyClient | null = null;
 
 export function getShopifyClient(): ShopifyClient | null {
-  // Support both naming conventions
   const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
-  const accessToken = process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN || process.env.SHOPIFY_ACCESS_TOKEN;
+  const clientId = process.env.SHOPIFY_CLIENT_ID || process.env.SHOPIFY_ADMIN_API_ACCESS_TOKEN;
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET || process.env.SHOPIFY_ACCESS_TOKEN;
   const apiVersion = process.env.SHOPIFY_API_VERSION || "2024-01";
 
-  if (!shopDomain || !accessToken) {
+  if (!shopDomain || !clientId || !clientSecret) {
     console.warn("Shopify credentials not configured - discount codes will not be created");
     return null;
   }
@@ -180,7 +259,8 @@ export function getShopifyClient(): ShopifyClient | null {
   if (!shopifyClient) {
     shopifyClient = new ShopifyClient({
       shopDomain,
-      accessToken,
+      clientId,
+      clientSecret,
       apiVersion,
     });
   }
