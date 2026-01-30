@@ -59,7 +59,7 @@ export default async function HelpPage() {
             <div>
               <h3 className="text-lg font-medium text-white mb-2">2. Customer Uses Your Code</h3>
               <p>
-                When someone uses your code at checkout, they get <span className="text-[#d4af37]">10% off</span> their order.
+                When someone uses your code at checkout, they get <span className="text-[#d4af37]">20% off</span> their order.
               </p>
             </div>
             <div>

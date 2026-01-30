@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const discountResult = await createAffiliateDiscount(
       affiliate.referral_code,
       affiliateName,
-      10 // 10% discount for customers
+      20 // 20% discount for customers
     );
 
     if (!discountResult.success) {

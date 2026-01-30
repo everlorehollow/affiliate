@@ -174,7 +174,7 @@ export default async function DashboardPage() {
             <CopyButton text={affiliate.referral_code} />
           </div>
           <p className="text-sm text-gray-400 mt-4">
-            Share this code with your audience. When they use it at checkout, they get 10% off
+            Share this code with your audience. When they use it at checkout, they get 20% off
             and you earn commission!
           </p>
         </div>
