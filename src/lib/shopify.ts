@@ -310,14 +310,6 @@ export async function createAffiliateDiscount(
   }
 
   try {
-    const existing = await client.lookupDiscountCode(referralCode);
-    if (existing) {
-      return {
-        success: false,
-        error: `Discount code "${referralCode}" already exists in Shopify`,
-      };
-    }
-
     const discount = await client.createDiscountCode({
       title: `Affiliate - ${affiliateName} (${referralCode})`,
       code: referralCode,
